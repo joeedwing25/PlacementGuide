@@ -1,17 +1,14 @@
 """
-InterviewIQ AI - Backend API regression tests.
+PlacementGuide - Backend API regression tests.
 
 Covers: auth (register/login/me), profile, resume analyze, quiz start+submit,
-interview start+answer (full 5-question flow), coach chat+history,
-roadmap generate+toggle+get, analytics overview.
+interview start+answer.
 
 Run:
-  pytest /app/backend/tests/backend_test.py -v \
-    --junitxml=/app/test_reports/pytest/pytest_results.xml
+  pytest backend/tests/backend_test.py -v
 """
 import io
 import os
-import time
 import uuid
 
 import pytest
@@ -22,7 +19,7 @@ BASE_URL = os.environ.get(
     "http://localhost:8000",
 ).rstrip("/")
 
-ADMIN_EMAIL = "admin@interviewiq.ai"
+ADMIN_EMAIL = "admin@placementguide.com"
 ADMIN_PASSWORD = "admin123"
 
 # ---------- shared fixtures ----------
@@ -165,7 +162,7 @@ def _make_sample_pdf() -> bytes:
         "Education: B.Tech in Computer Science",
         "Skills: Python, FastAPI, MongoDB, React, JavaScript",
         "Experience: Built REST APIs with FastAPI, deployed on AWS.",
-        "Projects: Built an AI interview coach using React + FastAPI.",
+        "Projects: Built a placement prep platform using React + FastAPI.",
         "Achievements: Solved 300+ DSA problems on LeetCode.",
     ]
     y = 800
@@ -236,8 +233,10 @@ class TestQuiz:
 
     def test_quiz_submit_returns_score(self, auth_headers, quiz_session):
         qs = quiz_session["questions"]
-        # Pick "A" for everything to exercise submission flow
-        answers = {q["id"]: "A" for q in qs}
+        # In the new server, static questions are returned.
+        # We don't necessarily know the correct answers here without looking at server.py,
+        # but we can at least verify the submission works.
+        answers = {q["id"]: "O(log n)" for q in qs}
         r = requests.post(
             f"{BASE_URL}/api/quiz/submit",
             json={"quiz_id": quiz_session["id"], "answers": answers},
@@ -288,91 +287,3 @@ class TestInterview:
             done = jb.get("done", False)
             loops += 1
         assert done is True, "interview did not finish after 5 questions"
-
-
-# ---------- COACH ----------
-
-
-class TestCoach:
-    def test_coach_chat_and_history(self, auth_headers):
-        r = requests.post(
-            f"{BASE_URL}/api/coach/chat",
-            json={"message": "Give me one tip to prepare for a backend interview."},
-            headers={**auth_headers, "Content-Type": "application/json"},
-            timeout=60,
-        )
-        assert r.status_code == 200, r.text
-        body = r.json()
-        assert isinstance(body["reply"], str) and len(body["reply"]) > 5
-
-        h = requests.get(f"{BASE_URL}/api/coach/history", headers=auth_headers, timeout=30)
-        assert h.status_code == 200
-        items = h.json()["items"]
-        assert len(items) >= 2  # user + assistant
-        roles = {m["role"] for m in items}
-        assert {"user", "assistant"}.issubset(roles)
-
-
-# ---------- ROADMAP ----------
-
-
-class TestRoadmap:
-    def test_generate_get_toggle(self, auth_headers):
-        r = requests.post(
-            f"{BASE_URL}/api/roadmap/generate",
-            headers=auth_headers,
-            timeout=90,
-        )
-        assert r.status_code == 200, r.text
-        data = r.json()["roadmap"]
-        for ph in ("phase_30", "phase_60", "phase_90"):
-            assert ph in data, f"missing {ph} in {list(data.keys())}"
-            assert "tasks" in data[ph]
-
-        # GET roadmap
-        g = requests.get(f"{BASE_URL}/api/roadmap", headers=auth_headers, timeout=30)
-        assert g.status_code == 200
-        assert g.json()["roadmap"]["phase_30"]["tasks"]
-
-        # Toggle first task in phase_30
-        tasks = data["phase_30"]["tasks"]
-        if tasks:
-            tid = tasks[0]["id"]
-            t = requests.post(
-                f"{BASE_URL}/api/roadmap/toggle",
-                json={"phase": "phase_30", "task_id": tid, "done": True},
-                headers={**auth_headers, "Content-Type": "application/json"},
-                timeout=30,
-            )
-            assert t.status_code == 200
-            new_data = t.json()["roadmap"]
-            toggled = next(
-                (x for x in new_data["phase_30"]["tasks"] if x["id"] == tid), None
-            )
-            assert toggled and toggled["done"] is True
-
-
-# ---------- ANALYTICS ----------
-
-
-class TestAnalytics:
-    def test_overview_keys(self, auth_headers):
-        r = requests.get(
-            f"{BASE_URL}/api/analytics/overview",
-            headers=auth_headers,
-            timeout=30,
-        )
-        assert r.status_code == 200, r.text
-        body = r.json()
-        for key in (
-            "readiness_score",
-            "resume_score",
-            "quiz_average",
-            "interview_average",
-            "roadmap_progress",
-            "counts",
-        ):
-            assert key in body, f"missing {key}"
-        counts = body["counts"]
-        for ck in ("resumes", "quizzes", "interviews", "roadmap_tasks_total"):
-            assert ck in counts

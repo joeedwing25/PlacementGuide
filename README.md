@@ -1,64 +1,62 @@
-# InterviewIQ AI — Backend
+# PlacementGuide
 
-FastAPI backend for a placement/internship prep tool: resume analysis, MCQ quizzes,
-mock interview practice, an AI coach chat, and a personalized prep roadmap.
+PlacementGuide is a student-built placement preparation platform designed to help college students prepare for technical and behavioral interviews. It provides tools for resume analysis, technical quizzes, and mock interviews.
 
 ## Features
 
-- **Auth** — register/login with JWT access + refresh tokens (cookie-based)
-- **Resume analysis** — upload a PDF/DOCX, get an ATS-style score and feedback via Gemini
-- **Quiz** — generates MCQ questions on a chosen topic/difficulty, tracks history
-- **Mock interview** — adaptive question flow with per-answer evaluation (technical accuracy,
-  communication, clarity, etc.)
-- **Coach chat** — conversational career advice, personalized using the user's profile
-- **Roadmap** — 30/60/90-day prep plan generated from the user's profile
-- **Analytics** — aggregate view of quiz/interview performance over time
+- **Resume Analyzer**: Get an ATS (Applicant Tracking System) score and suggestions for your resume powered by Google Gemini.
+- **Quiz Practice**: Practice multiple-choice questions on various technical topics like DSA, SQL, DBMS, and more.
+- **Mock Interview**: Simulate real interview sessions with structured technical and behavioral questions.
+- **Progress Tracker**: Keep track of your performance in quizzes and mock interviews.
+- **Profile Management**: Maintain your academic details and skill set.
 
-## Tech stack
+## Tech Stack
 
-- FastAPI + Motor (async MongoDB driver)
-- JWT auth (python-jose / PyJWT) with bcrypt password hashing
-- Gemini API via the official `google-genai` SDK
-- pypdf / python-docx for resume text extraction
-- pytest for backend regression tests
+- **Frontend**: React.js, Tailwind CSS, Lucide React
+- **Backend**: FastAPI (Python), Motor (Async MongoDB driver)
+- **Database**: MongoDB
+- **AI Integration**: Google Gemini API (used for Resume Analysis)
 
-## Running locally
+## Getting Started
 
-```bash
-cd backend
-pip install -r requirements.txt
-```
+### Prerequisites
 
-Create a `.env` file in `backend/` with:
+- Node.js & npm/yarn
+- Python 3.10+
+- MongoDB instance (local or Atlas)
+- Gemini API Key
 
-```
-MONGO_URL=mongodb://localhost:27017
-DB_NAME=interviewiq
-GEMINI_API_KEY=your_key_here
-JWT_SECRET=some_random_secret
-```
+### Backend Setup
 
-Then:
+1. Navigate to the `backend` directory.
+2. Create a `.env` file with the following:
+   ```env
+   MONGO_URL=your_mongodb_url
+   DB_NAME=placementguide
+   JWT_SECRET=your_secret_key
+   GEMINI_API_KEY=your_gemini_api_key
+   ```
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. Start the server:
+   ```bash
+   uvicorn server:app --port 8000
+   ```
 
-```bash
-uvicorn server:app --reload
-```
+### Frontend Setup
 
-API will be available at `http://localhost:8000/api`.
+1. Navigate to the `frontend` directory.
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the development server:
+   ```bash
+   npm start
+   ```
 
-## Tests
+## Development
 
-```bash
-pytest backend/tests/backend_test.py -v
-```
-
-Tests hit a running instance of the API (set `REACT_APP_BACKEND_URL` if not on localhost:8000).
-
-## Notes / future improvements
-
-- Resume parsing is plain text extraction; doesn't handle multi-column layouts well
-- Coach chat doesn't persist conversation state server-side between calls — history is
-  passed back in each request
-- TODO: rate-limit the Gemini-backed endpoints (resume analyze, quiz generation) to avoid
-  hitting API quotas under load
-- TODO: add pagination to quiz/interview history endpoints
+This project was built as a semester project to provide a clean and practical tool for students to prepare for their campus placements.

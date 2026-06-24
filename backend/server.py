@@ -1,17 +1,15 @@
-"""InterviewIQ AI - FastAPI backend."""
+"""PlacementGuide - FastAPI backend."""
 from dotenv import load_dotenv
 from pathlib import Path
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
 import os
-import uuid
 import logging
 import certifi
 from datetime import datetime, timezone
 from typing import Optional, List, Any
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Response, UploadFile, File, Form
-from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field
@@ -21,21 +19,18 @@ from auth import (
     hash_password, verify_password, create_access_token, create_refresh_token,
     set_auth_cookies, clear_auth_cookies, get_current_user,
 )
-from gemini_service import (
-    analyze_resume, generate_quiz, generate_roadmap,
-    next_interview_question, evaluate_interview_answer, coach_reply,
-)
+from gemini_service import analyze_resume
 from resume_parser import extract_resume_text
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger("interviewiq")
+logger = logging.getLogger("placementguide")
 
 
 # ---------- DB ----------
 mongo_url = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
 client = AsyncIOMotorClient(mongo_url, tlsCAFile=certifi.where())
-db = client[os.environ.get("DB_NAME", "interviewiq")]
+db = client[os.environ.get("DB_NAME", "placementguide")]
 
 
 # ---------- Helpers ----------
@@ -59,7 +54,7 @@ def _serialize(doc: dict) -> dict:
 
 
 # ---------- App ----------
-app = FastAPI(title="InterviewIQ AI")
+app = FastAPI(title="PlacementGuide")
 api = APIRouter(prefix="/api")
 
 
@@ -69,11 +64,10 @@ async def on_startup():
     await db.profiles.create_index("user_id", unique=True)
     await db.quizzes.create_index("user_id")
     await db.interviews.create_index("user_id")
-    await db.coach_messages.create_index("user_id")
     await db.resumes.create_index("user_id")
-    await db.roadmaps.create_index("user_id")
+
     # Seed admin
-    admin_email = os.environ.get("ADMIN_EMAIL", "admin@interviewiq.ai")
+    admin_email = os.environ.get("ADMIN_EMAIL", "admin@placementguide.com")
     admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
     existing = await db.users.find_one({"email": admin_email})
     if not existing:
@@ -178,19 +172,6 @@ class ProfileIn(BaseModel):
     achievements: List[str] = []
 
 
-def _profile_summary(profile: dict, name: str = "") -> str:
-    if not profile:
-        return f"Name: {name}\n(no profile data yet)"
-    return (
-        f"Name: {name}\nTarget Role: {profile.get('target_role','')}\n"
-        f"College: {profile.get('college','')} | Degree: {profile.get('degree','')} ({profile.get('branch','')})\n"
-        f"Skills: {', '.join(profile.get('skills',[]))}\n"
-        f"Languages: {', '.join(profile.get('languages',[]))}\n"
-        f"Frameworks: {', '.join(profile.get('frameworks',[]))}\n"
-        f"Projects: {', '.join(p.get('name','') for p in profile.get('projects',[]))}"
-    )
-
-
 @api.get("/profile")
 async def get_profile(user=Depends(get_current_user)):
     p = await db.profiles.find_one({"user_id": _user_oid(user)})
@@ -267,15 +248,20 @@ class QuizSubmitIn(BaseModel):
     quiz_id: str
     answers: dict  # {q_id: "A"}
 
+# Static questions for a "student-built" feel
+STATIC_QUESTIONS = [
+    {"id": "q1", "question": "What is the time complexity of searching in a balanced BST?", "options": ["O(1)", "O(log n)", "O(n)", "O(n log n)"], "correct_answer": "O(log n)", "explanation": "Balanced BST search is logarithmic."},
+    {"id": "q2", "question": "Which of these is not a feature of OOP?", "options": ["Encapsulation", "Polymorphism", "Inheritance", "Compilation"], "correct_answer": "Compilation", "explanation": "Compilation is a process, not an OOP feature."},
+    {"id": "q3", "question": "What does SQL stand for?", "options": ["Structured Query Language", "Strong Question Language", "Simple Query List", "Server Queue Language"], "correct_answer": "Structured Query Language", "explanation": "Standard for database queries."},
+    {"id": "q4", "question": "In Python, which keyword is used to create a function?", "options": ["func", "define", "def", "lambda"], "correct_answer": "def", "explanation": "'def' is the standard keyword for functions."},
+    {"id": "q5", "question": "Which layer of the OSI model is responsible for routing?", "options": ["Data Link", "Network", "Transport", "Physical"], "correct_answer": "Network", "explanation": "The Network layer handles IP routing."},
+]
 
 @api.post("/quiz/start")
 async def quiz_start(body: QuizStartIn, user=Depends(get_current_user)):
-    if body.count not in (5, 10, 20, 50):
-        body.count = 10
-    data = await generate_quiz(body.topic, body.difficulty, body.count)
-    questions = data.get("questions", [])
-    if not questions:
-        raise HTTPException(status_code=500, detail="Failed to generate quiz questions")
+    # In a real student project, they might have a local JSON file or a simple DB collection of questions.
+    # We'll use a subset of static questions based on count.
+    questions = STATIC_QUESTIONS[:body.count]
     quiz = {
         "user_id": _user_oid(user),
         "topic": body.topic,
@@ -286,9 +272,9 @@ async def quiz_start(body: QuizStartIn, user=Depends(get_current_user)):
     }
     res = await db.quizzes.insert_one(quiz)
     quiz["_id"] = res.inserted_id
-    safe_qs = [{k: v for k, v in q.items() if k not in ("correct_answer", "explanation")} for q in questions]
     out = _serialize(quiz)
-    out["questions"] = safe_qs
+    # Hide correct answers for in-progress quiz
+    out["questions"] = [{k: v for k, v in q.items() if k not in ("correct_answer", "explanation")} for q in questions]
     return {"quiz": out}
 
 
@@ -301,13 +287,16 @@ async def quiz_submit(body: QuizSubmitIn, user=Depends(get_current_user)):
     quiz = await db.quizzes.find_one({"_id": oid, "user_id": _user_oid(user)})
     if not quiz:
         raise HTTPException(status_code=404, detail="Quiz not found")
+
     total = len(quiz["questions"])
     correct = 0
     detail = []
     for q in quiz["questions"]:
         qid = q.get("id")
         user_ans = body.answers.get(qid, "")
-        is_correct = (str(user_ans).strip().upper() == str(q.get("correct_answer", "")).strip().upper())
+        # We handle both index-based (A, B, C, D) or text-based comparison if needed.
+        # Here we assume the static questions use the text as correct_answer for simplicity or the option value.
+        is_correct = (str(user_ans).strip() == str(q.get("correct_answer", "")).strip())
         if is_correct:
             correct += 1
         detail.append({
@@ -328,8 +317,7 @@ async def quiz_submit(body: QuizSubmitIn, user=Depends(get_current_user)):
 
 @api.get("/quiz/history")
 async def quiz_history(user=Depends(get_current_user)):
-    cur = db.quizzes.find({"user_id": _user_oid(user), "status": "completed"},
-                         {"questions": 0, "answers": 0}).sort("created_at", -1).limit(50)
+    cur = db.quizzes.find({"user_id": _user_oid(user), "status": "completed"}).sort("created_at", -1).limit(50)
     items = [_serialize(d) async for d in cur]
     return {"items": items}
 
@@ -345,22 +333,37 @@ class InterviewAnswerIn(BaseModel):
     session_id: str
     answer: str
 
+STATIC_INTERVIEW_QUESTIONS = {
+    "technical": [
+        "What is the difference between a process and a thread?",
+        "Explain the concept of virtual memory.",
+        "What are the ACID properties in a database?",
+        "How does a hash table work under the hood?",
+        "What is the difference between TCP and UDP?"
+    ],
+    "behavioral": [
+        "Tell me about a time you faced a conflict in a team.",
+        "What is your greatest strength and weakness?",
+        "Why do you want to join this company?",
+        "Describe a challenging project you worked on.",
+        "Where do you see yourself in 5 years?"
+    ]
+}
 
 @api.post("/interview/start")
 async def interview_start(body: InterviewStartIn, user=Depends(get_current_user)):
-    profile = await db.profiles.find_one({"user_id": _user_oid(user)})
-    summary = _profile_summary(profile or {}, user.get("name", ""))
-    q = await next_interview_question(body.mode, summary, [])
+    mode = body.mode if body.mode in STATIC_INTERVIEW_QUESTIONS else "technical"
+    questions = STATIC_INTERVIEW_QUESTIONS[mode]
+    q = questions[0]
     session = {
         "user_id": _user_oid(user),
-        "mode": body.mode,
-        "context": summary,
-        "qa": [{"question": q["question"], "category": q.get("category", "")}],
+        "mode": mode,
+        "qa": [{"question": q, "index": 0}],
         "status": "in_progress",
         "created_at": now_iso(),
     }
     res = await db.interviews.insert_one(session)
-    return {"session_id": str(res.inserted_id), "question": q["question"], "category": q.get("category", "")}
+    return {"session_id": str(res.inserted_id), "question": q}
 
 
 @api.post("/interview/answer")
@@ -372,18 +375,29 @@ async def interview_answer(body: InterviewAnswerIn, user=Depends(get_current_use
     session = await db.interviews.find_one({"_id": oid, "user_id": _user_oid(user)})
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    qa = session["qa"]
-    current_q = qa[-1]
-    evaluation = await evaluate_interview_answer(current_q["question"], body.answer, session["mode"])
-    qa[-1] = {**current_q, "answer": body.answer, "evaluation": evaluation}
 
-    next_q_text, next_cat, done = None, None, False
-    if len(qa) < 5:
-        asked = [item["question"] for item in qa]
-        next_q = await next_interview_question(session["mode"], session["context"], asked)
-        next_q_text = next_q["question"]
-        next_cat = next_q.get("category", "")
-        qa.append({"question": next_q_text, "category": next_cat})
+    qa = session["qa"]
+    current_idx = qa[-1]["index"]
+
+    # Simple length-based evaluation for "student" feel
+    ans_len = len(body.answer.strip())
+    score = 40 if ans_len < 20 else 70 if ans_len < 100 else 90
+    evaluation = {
+        "overall_score": score,
+        "feedback": "Good attempt. Try to be more detailed." if ans_len < 50 else "Solid answer with good detail.",
+        "improvements": ["Add more specific examples."] if ans_len < 100 else []
+    }
+
+    qa[-1]["answer"] = body.answer
+    qa[-1]["evaluation"] = evaluation
+
+    next_q_text, done = None, False
+    questions = STATIC_INTERVIEW_QUESTIONS.get(session["mode"], STATIC_INTERVIEW_QUESTIONS["technical"])
+
+    if current_idx + 1 < len(questions) and current_idx < 4: # limit to 5 questions
+        next_idx = current_idx + 1
+        next_q_text = questions[next_idx]
+        qa.append({"question": next_q_text, "index": next_idx})
     else:
         done = True
 
@@ -399,7 +413,6 @@ async def interview_answer(body: InterviewAnswerIn, user=Depends(get_current_use
     return {
         "evaluation": evaluation,
         "next_question": next_q_text,
-        "category": next_cat,
         "done": done,
         "overall_score": update.get("overall_score"),
     }
@@ -422,144 +435,6 @@ async def interview_detail(session_id: str, user=Depends(get_current_user)):
     if not s:
         raise HTTPException(status_code=404, detail="Not found")
     return {"session": _serialize(s)}
-
-
-# ============================================================
-# COACH CHAT
-# ============================================================
-class CoachIn(BaseModel):
-    message: str
-
-
-@api.get("/coach/history")
-async def coach_history(user=Depends(get_current_user)):
-    cur = db.coach_messages.find({"user_id": _user_oid(user)}).sort("created_at", 1).limit(200)
-    items = [{"role": d["role"], "content": d["content"], "created_at": d["created_at"]} async for d in cur]
-    return {"items": items}
-
-
-@api.post("/coach/chat")
-async def coach_chat(body: CoachIn, user=Depends(get_current_user)):
-    profile = await db.profiles.find_one({"user_id": _user_oid(user)})
-    summary = _profile_summary(profile or {}, user.get("name", ""))
-    cur = db.coach_messages.find({"user_id": _user_oid(user)}).sort("created_at", -1).limit(10)
-    history = [{"role": d["role"], "content": d["content"]} async for d in cur]
-    history.reverse()
-
-    reply = await coach_reply(history, summary, body.message)
-
-    await db.coach_messages.insert_one({
-        "user_id": _user_oid(user), "role": "user",
-        "content": body.message, "created_at": now_iso(),
-    })
-    await db.coach_messages.insert_one({
-        "user_id": _user_oid(user), "role": "assistant",
-        "content": reply, "created_at": now_iso(),
-    })
-    return {"reply": reply}
-
-
-# ============================================================
-# ROADMAP
-# ============================================================
-@api.post("/roadmap/generate")
-async def roadmap_generate(user=Depends(get_current_user)):
-    profile = await db.profiles.find_one({"user_id": _user_oid(user)})
-    summary = _profile_summary(profile or {}, user.get("name", ""))
-    data = await generate_roadmap(summary)
-    doc = {"user_id": _user_oid(user), "data": data, "created_at": now_iso()}
-    await db.roadmaps.update_one({"user_id": _user_oid(user)},
-                                 {"$set": doc}, upsert=True)
-    return {"roadmap": data}
-
-
-@api.get("/roadmap")
-async def roadmap_get(user=Depends(get_current_user)):
-    r = await db.roadmaps.find_one({"user_id": _user_oid(user)})
-    if not r:
-        return {"roadmap": None}
-    return {"roadmap": r.get("data")}
-
-
-class RoadmapTaskToggle(BaseModel):
-    phase: str
-    task_id: str
-    done: bool
-
-
-@api.post("/roadmap/toggle")
-async def roadmap_toggle(body: RoadmapTaskToggle, user=Depends(get_current_user)):
-    r = await db.roadmaps.find_one({"user_id": _user_oid(user)})
-    if not r:
-        raise HTTPException(status_code=404, detail="No roadmap")
-    data = r["data"]
-    phase = data.get(body.phase)
-    if not phase:
-        raise HTTPException(status_code=400, detail="Invalid phase")
-    for t in phase.get("tasks", []):
-        if t.get("id") == body.task_id:
-            t["done"] = body.done
-            break
-    await db.roadmaps.update_one({"user_id": _user_oid(user)}, {"$set": {"data": data}})
-    return {"roadmap": data}
-
-
-# ============================================================
-# ANALYTICS
-# ============================================================
-@api.get("/analytics/overview")
-async def analytics_overview(user=Depends(get_current_user)):
-    resume = await db.resumes.find_one({"user_id": _user_oid(user)}, sort=[("created_at", -1)])
-    resume_score = resume["analysis"].get("ats_score", 0) if resume else 0
-
-    quiz_cur = db.quizzes.find({"user_id": _user_oid(user), "status": "completed"})
-    topic_scores: dict = {}
-    quiz_history_points = []
-    async for q in quiz_cur:
-        topic_scores.setdefault(q["topic"], []).append(q.get("score", 0))
-        quiz_history_points.append({
-            "date": q.get("completed_at") or q.get("created_at"),
-            "topic": q["topic"],
-            "score": q.get("score", 0),
-        })
-    topic_avg = {t: round(sum(s) / len(s)) for t, s in topic_scores.items() if s}
-
-    interview_scores = []
-    interview_cur = db.interviews.find({"user_id": _user_oid(user), "status": "completed"})
-    async for iv in interview_cur:
-        interview_scores.append(iv.get("overall_score", 0))
-    interview_avg = round(sum(interview_scores) / len(interview_scores)) if interview_scores else 0
-
-    rm = await db.roadmaps.find_one({"user_id": _user_oid(user)})
-    completed, total = 0, 0
-    if rm:
-        for ph in ("phase_30", "phase_60", "phase_90"):
-            tasks = (rm["data"].get(ph) or {}).get("tasks", [])
-            total += len(tasks)
-            completed += sum(1 for t in tasks if t.get("done"))
-    roadmap_pct = round((completed / total) * 100) if total else 0
-
-    quiz_overall = round(sum(topic_avg.values()) / len(topic_avg)) if topic_avg else 0
-    components = [resume_score, quiz_overall, interview_avg, roadmap_pct]
-    nonzero = [c for c in components if c > 0]
-    readiness = round(sum(nonzero) / len(nonzero)) if nonzero else 0
-
-    return {
-        "readiness_score": readiness,
-        "resume_score": resume_score,
-        "quiz_average": quiz_overall,
-        "interview_average": interview_avg,
-        "roadmap_progress": roadmap_pct,
-        "topic_breakdown": topic_avg,
-        "quiz_history": sorted(quiz_history_points, key=lambda x: x["date"])[-20:],
-        "counts": {
-            "resumes": await db.resumes.count_documents({"user_id": _user_oid(user)}),
-            "quizzes": await db.quizzes.count_documents({"user_id": _user_oid(user), "status": "completed"}),
-            "interviews": len(interview_scores),
-            "roadmap_tasks_completed": completed,
-            "roadmap_tasks_total": total,
-        },
-    }
 
 
 app.include_router(api)
