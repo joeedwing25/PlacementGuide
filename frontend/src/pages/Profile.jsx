@@ -16,6 +16,14 @@ const ROLES = [
   "Full Stack Developer", "ML Engineer",
 ];
 
+const INITIAL_PROFILE_STATE = {
+  college: "", degree: "", branch: "", graduation_year: "",
+  target_role: "Software Engineer",
+  skills: [], languages: [], frameworks: [], databases: [], tools: [],
+  github_url: "", leetcode_url: "", hackerrank_url: "", codeforces_url: "", linkedin_url: "",
+  projects: [], achievements: [],
+};
+
 function ChipsInput({ label, value, onChange, placeholder, testid }) {
   const [input, setInput] = useState("");
   const add = () => {
@@ -56,20 +64,13 @@ function ChipsInput({ label, value, onChange, placeholder, testid }) {
 export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const empty = {
-    college: "", degree: "", branch: "", graduation_year: "",
-    target_role: "Software Engineer",
-    skills: [], languages: [], frameworks: [], databases: [], tools: [],
-    github_url: "", leetcode_url: "", hackerrank_url: "", codeforces_url: "", linkedin_url: "",
-    projects: [], achievements: [],
-  };
-  const [p, setP] = useState(empty);
+  const [p, setP] = useState(INITIAL_PROFILE_STATE);
 
   useEffect(() => {
     (async () => {
       try {
         const { data } = await api.get("/profile");
-        if (data.profile) setP({ ...empty, ...data.profile, graduation_year: data.profile.graduation_year ?? "" });
+        if (data.profile) setP({ ...INITIAL_PROFILE_STATE, ...data.profile, graduation_year: data.profile.graduation_year ?? "" });
       } finally { setLoading(false); }
     })();
   }, []);
