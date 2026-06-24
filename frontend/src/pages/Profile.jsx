@@ -53,23 +53,24 @@ function ChipsInput({ label, value, onChange, placeholder, testid }) {
   );
 }
 
+const EMPTY_PROFILE = {
+  college: "", degree: "", branch: "", graduation_year: "",
+  target_role: "Software Engineer",
+  skills: [], languages: [], frameworks: [], databases: [], tools: [],
+  github_url: "", leetcode_url: "", hackerrank_url: "", codeforces_url: "", linkedin_url: "",
+  projects: [], achievements: [],
+};
+
 export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const empty = {
-    college: "", degree: "", branch: "", graduation_year: "",
-    target_role: "Software Engineer",
-    skills: [], languages: [], frameworks: [], databases: [], tools: [],
-    github_url: "", leetcode_url: "", hackerrank_url: "", codeforces_url: "", linkedin_url: "",
-    projects: [], achievements: [],
-  };
-  const [p, setP] = useState(empty);
+  const [p, setP] = useState(EMPTY_PROFILE);
 
   useEffect(() => {
     (async () => {
       try {
         const { data } = await api.get("/profile");
-        if (data.profile) setP({ ...empty, ...data.profile, graduation_year: data.profile.graduation_year ?? "" });
+        if (data.profile) setP({ ...EMPTY_PROFILE, ...data.profile, graduation_year: data.profile.graduation_year ?? "" });
       } finally { setLoading(false); }
     })();
   }, []);
