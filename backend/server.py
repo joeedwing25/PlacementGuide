@@ -32,9 +32,9 @@ logger = logging.getLogger("interviewiq")
 
 
 # ---------- DB ----------
-mongo_url = os.environ["MONGO_URL"]
+mongo_url = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ["DB_NAME"]]
+db = client[os.environ.get("DB_NAME", "interviewiq")]
 
 
 # ---------- Helpers ----------
@@ -563,9 +563,14 @@ async def analytics_overview(user=Depends(get_current_user)):
 
 app.include_router(api)
 
+frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000").rstrip("/")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.environ.get("FRONTEND_URL", "http://localhost:3000"), "http://localhost:3000"],
+    allow_origins=[
+        frontend_url,
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

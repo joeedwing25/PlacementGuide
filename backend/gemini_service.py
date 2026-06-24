@@ -6,7 +6,7 @@ import uuid
 from google import genai
 from google.genai import types
 
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-1.5-flash"
 
 _client = None
 
