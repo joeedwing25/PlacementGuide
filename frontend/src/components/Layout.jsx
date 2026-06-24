@@ -1,27 +1,23 @@
 import React from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { useTheme } from "@/contexts/ThemeContext";
 import { Button } from "@/components/ui/button";
 import {
-  LayoutDashboard, FileText, Brain, Mic, MessageSquare,
-  Map, BarChart3, User, LogOut, Moon, Sun, Sparkles,
+  LayoutDashboard, FileText, Brain, Mic,
+  History, User, LogOut
 } from "lucide-react";
 
 const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard" },
-  { to: "/profile", label: "Profile", icon: User, testid: "nav-profile" },
-  { to: "/resume", label: "Resume", icon: FileText, testid: "nav-resume" },
-  { to: "/quiz", label: "Quiz Center", icon: Brain, testid: "nav-quiz" },
+  { to: "/resume", label: "Resume Analyzer", icon: FileText, testid: "nav-resume" },
+  { to: "/quiz", label: "Quiz Practice", icon: Brain, testid: "nav-quiz" },
   { to: "/interview", label: "Mock Interview", icon: Mic, testid: "nav-interview" },
-  { to: "/coach", label: "AI Coach", icon: MessageSquare, testid: "nav-coach" },
-  { to: "/roadmap", label: "Roadmap", icon: Map, testid: "nav-roadmap" },
-  { to: "/analytics", label: "Analytics", icon: BarChart3, testid: "nav-analytics" },
+  { to: "/progress", label: "Progress Tracker", icon: History, testid: "nav-progress" },
+  { to: "/profile", label: "Profile", icon: User, testid: "nav-profile" },
 ];
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
-  const { theme, toggle } = useTheme();
   const navigate = useNavigate();
 
   return (
@@ -29,10 +25,7 @@ export default function Layout({ children }) {
       {/* Sidebar */}
       <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-border bg-surface">
         <Link to="/dashboard" className="flex items-center gap-2 px-6 h-16 border-b border-border" data-testid="brand-link">
-          <div className="w-8 h-8 rounded-md bg-primary text-primary-foreground flex items-center justify-center">
-            <Sparkles className="w-4 h-4" />
-          </div>
-          <span className="font-heading font-bold text-lg tracking-tight">InterviewIQ</span>
+          <span className="font-heading font-bold text-lg tracking-tight">PlacementGuide</span>
         </Link>
         <nav className="flex-1 px-3 py-4 space-y-1">
           {navItems.map((item) => (
@@ -63,10 +56,6 @@ export default function Layout({ children }) {
               <div className="text-xs text-muted-foreground truncate">{user?.email}</div>
             </div>
           </div>
-          <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={toggle} data-testid="theme-toggle">
-            {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            {theme === "dark" ? "Light mode" : "Dark mode"}
-          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -82,19 +71,13 @@ export default function Layout({ children }) {
       {/* Mobile top bar */}
       <div className="md:hidden fixed top-0 inset-x-0 z-40 h-14 border-b border-border bg-surface/80 backdrop-blur flex items-center justify-between px-4">
         <Link to="/dashboard" className="flex items-center gap-2" data-testid="brand-link-mobile">
-          <div className="w-7 h-7 rounded-md bg-primary text-primary-foreground flex items-center justify-center">
-            <Sparkles className="w-4 h-4" />
-          </div>
-          <span className="font-heading font-bold">InterviewIQ</span>
+          <span className="font-heading font-bold">PlacementGuide</span>
         </Link>
-        <Button variant="ghost" size="sm" onClick={toggle} data-testid="theme-toggle-mobile">
-          {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-        </Button>
       </div>
 
       {/* Mobile bottom nav */}
       <div className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t border-border bg-surface flex justify-around py-2">
-        {navItems.slice(0, 5).map((item) => (
+        {navItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}

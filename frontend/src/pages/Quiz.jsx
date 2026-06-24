@@ -45,7 +45,7 @@ export default function Quiz() {
     } finally { setBusy(false); }
   };
 
-  const pickAnswer = (qid, letter) => setAnswers((a) => ({ ...a, [qid]: letter }));
+  const pickAnswer = (qid, text) => setAnswers((a) => ({ ...a, [qid]: text }));
 
   const submit = async () => {
     setBusy(true);
@@ -66,9 +66,8 @@ export default function Quiz() {
     return (
       <div className="space-y-8" data-testid="quiz-select-page">
         <header>
-          <div className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">Quiz center</div>
-          <h1 className="mt-2 text-3xl md:text-4xl font-heading font-black tracking-tighter">Pick a topic. Train.</h1>
-          <p className="mt-2 text-muted-foreground">AI generates fresh questions every session.</p>
+          <h1 className="text-3xl font-bold tracking-tight">Quiz Practice</h1>
+          <p className="mt-2 text-muted-foreground text-lg">Test your knowledge with multiple choice questions.</p>
         </header>
 
         <Card className="p-6 md:p-8 space-y-6">
@@ -95,26 +94,26 @@ export default function Quiz() {
               </Select>
             </div>
           </div>
-          <Button onClick={start} disabled={busy} size="lg" className="rounded-full font-semibold gap-2" data-testid="quiz-start-btn">
-            <Brain className="w-4 h-4" /> {busy ? "Generating..." : "Start quiz"}
+          <Button onClick={start} disabled={busy} size="lg" className="font-semibold gap-2" data-testid="quiz-start-btn">
+             {busy ? "Starting..." : "Start Quiz"}
           </Button>
         </Card>
 
         {history.length > 0 && (
-          <Card className="p-6 md:p-8" data-testid="quiz-history">
-            <h3 className="font-heading font-bold text-lg mb-4">Recent quizzes</h3>
-            <div className="space-y-3">
-              {history.slice(0, 10).map((h) => (
-                <div key={h.id} className="flex items-center justify-between border border-border rounded-md p-3 text-sm" data-testid={`quiz-history-${h.id}`}>
+          <div data-testid="quiz-history">
+            <h3 className="text-xl font-bold mb-4">Recent Quizzes</h3>
+            <div className="grid gap-3">
+              {history.slice(0, 5).map((h) => (
+                <Card key={h.id} className="flex items-center justify-between p-4" data-testid={`quiz-history-${h.id}`}>
                   <div>
-                    <span className="font-semibold">{h.topic}</span>
-                    <span className="text-muted-foreground"> · {h.difficulty} · {h.total} Qs</span>
+                    <span className="font-bold">{h.topic}</span>
+                    <span className="text-muted-foreground ml-2 text-sm capitalize">· {h.difficulty} · {h.total} Qs</span>
                   </div>
                   <Badge variant={h.score >= 70 ? "default" : "secondary"} className="font-mono">{h.score}%</Badge>
-                </div>
+                </Card>
               ))}
             </div>
-          </Card>
+          </div>
         )}
       </div>
     );
@@ -126,44 +125,38 @@ export default function Quiz() {
     const allAnswered = quiz.questions.every((qq) => answers[qq.id]);
     return (
       <div className="max-w-3xl space-y-6" data-testid="quiz-playing-page">
-        <div className="sticky top-0 z-10 -mx-6 px-6 py-3 bg-background/90 backdrop-blur border-b border-border flex items-center justify-between">
-          <div className="text-sm font-medium">Question {idx + 1} / {total}</div>
-          <div className="text-sm font-mono">{quiz.topic} · {quiz.difficulty}</div>
+        <div className="flex items-center justify-between border-b pb-4">
+          <div className="font-bold">Question {idx + 1} of {total}</div>
+          <div className="text-sm text-muted-foreground">{quiz.topic} · {quiz.difficulty}</div>
         </div>
-        <Progress value={((idx + 1) / total) * 100} className="h-1" />
+        <Progress value={((idx + 1) / total) * 100} className="h-2" />
 
         <Card className="p-6 md:p-8">
-          <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Question</div>
-          <div className="mt-2 text-xl font-heading font-bold leading-snug" data-testid="quiz-question-text">{q.question}</div>
-          <div className="mt-6 space-y-2">
+          <div className="text-xl font-bold leading-snug" data-testid="quiz-question-text">{q.question}</div>
+          <div className="mt-8 space-y-3">
             {q.options.map((opt, i) => {
-              const letter = String.fromCharCode(65 + i);
-              const selected = answers[q.id] === letter;
+              const selected = answers[q.id] === opt;
               return (
                 <button
                   key={i}
-                  onClick={() => pickAnswer(q.id, letter)}
-                  data-testid={`quiz-option-${letter}`}
-                  className={`w-full text-left border rounded-md px-4 py-3 transition-colors ${selected ? "border-primary bg-primary/10" : "border-border hover:bg-secondary"}`}
+                  onClick={() => pickAnswer(q.id, opt)}
+                  className={`w-full text-left border rounded-lg px-6 py-4 transition-colors font-medium ${selected ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:bg-muted"}`}
                 >
-                  <span className="font-mono font-bold mr-3">{letter}.</span>{opt}
+                  {opt}
                 </button>
               );
             })}
           </div>
-          <div className="mt-6 flex justify-between">
+          <div className="mt-8 flex justify-between">
             <Button variant="outline" disabled={idx === 0} onClick={() => setIdx((i) => i - 1)} data-testid="quiz-prev-btn">Previous</Button>
             {idx < total - 1 ? (
               <Button onClick={() => setIdx((i) => i + 1)} className="gap-2" data-testid="quiz-next-btn">Next <ArrowRight className="w-4 h-4" /></Button>
             ) : (
               <Button onClick={submit} disabled={!allAnswered || busy} className="gap-2" data-testid="quiz-submit-btn">
-                {busy ? "Scoring..." : "Submit"} <CheckCircle className="w-4 h-4" />
+                {busy ? "Submitting..." : "Finish Quiz"} <CheckCircle className="w-4 h-4" />
               </Button>
             )}
           </div>
-          {!allAnswered && idx === total - 1 && (
-            <div className="mt-3 text-xs text-muted-foreground">Answer all questions to submit.</div>
-          )}
         </Card>
       </div>
     );
@@ -172,28 +165,33 @@ export default function Quiz() {
   if (stage === "results" && result) {
     return (
       <div className="max-w-3xl space-y-6" data-testid="quiz-results-page">
-        <Card className="p-8 text-center">
-          <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Final score</div>
-          <div className="mt-2 text-7xl font-heading font-black tracking-tighter font-mono tabular-nums" data-testid="quiz-final-score">{result.score}</div>
-          <div className="mt-2 text-muted-foreground">{result.correct} / {result.total} correct</div>
-          <Button onClick={restart} className="mt-6 gap-2 rounded-full" data-testid="quiz-restart-btn">
-            <RotateCcw className="w-4 h-4" /> New quiz
+        <Card className="p-10 text-center">
+          <h2 className="text-2xl font-bold text-muted-foreground uppercase tracking-widest">Final Score</h2>
+          <div className="mt-4 text-7xl font-bold" data-testid="quiz-final-score">{result.score}%</div>
+          <div className="mt-2 text-lg text-muted-foreground">{result.correct} out of {result.total} correct</div>
+          <Button onClick={restart} className="mt-8 gap-2 px-8" data-testid="quiz-restart-btn">
+            <RotateCcw className="w-4 h-4" /> Try Another Quiz
           </Button>
         </Card>
 
-        <div className="space-y-3">
+        <div className="space-y-4">
           {result.detail.map((d, i) => (
-            <Card key={d.id} className="p-5" data-testid={`quiz-result-detail-${i}`}>
-              <div className="flex items-start gap-3">
-                {d.is_correct ? <CheckCircle className="w-5 h-5 text-emerald-500 mt-1" /> : <XCircle className="w-5 h-5 text-destructive mt-1" />}
+            <Card key={d.id} className="p-6" data-testid={`quiz-result-detail-${i}`}>
+              <div className="flex items-start gap-4">
+                {d.is_correct ? <CheckCircle className="w-6 h-6 text-emerald-500 mt-0.5" /> : <XCircle className="w-6 h-6 text-destructive mt-0.5" />}
                 <div className="flex-1">
-                  <div className="font-medium">{i + 1}. {d.question}</div>
-                  <div className="mt-2 text-sm">
-                    Your answer: <span className="font-mono font-bold">{d.your_answer || "—"}</span>
-                    {" · "}
-                    Correct: <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{d.correct_answer}</span>
+                  <div className="font-bold text-lg">{i + 1}. {d.question}</div>
+                  <div className="mt-4 flex flex-col sm:flex-row gap-4 text-sm">
+                    <div className="p-3 bg-muted rounded-md flex-1">
+                      <span className="font-bold block mb-1">Your Answer:</span>
+                      {d.your_answer || "No answer"}
+                    </div>
+                    <div className="p-3 bg-emerald-50 text-emerald-900 rounded-md flex-1">
+                      <span className="font-bold block mb-1">Correct Answer:</span>
+                      {d.correct_answer}
+                    </div>
                   </div>
-                  {d.explanation && <div className="mt-2 text-sm text-muted-foreground">{d.explanation}</div>}
+                  {d.explanation && <div className="mt-4 p-4 border-l-4 border-muted text-sm italic">{d.explanation}</div>}
                 </div>
               </div>
             </Card>
