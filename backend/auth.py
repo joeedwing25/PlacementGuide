@@ -13,7 +13,7 @@ REFRESH_TOKEN_DAYS = 30
 
 
 def _secret() -> str:
-    return os.environ["JWT_SECRET"]
+    return os.environ.get("JWT_SECRET", "fallback-secret-for-dev-only")
 
 
 def hash_password(password: str) -> str:
