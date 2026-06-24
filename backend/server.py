@@ -7,6 +7,7 @@ load_dotenv(ROOT_DIR / ".env")
 import os
 import uuid
 import logging
+import certifi
 from datetime import datetime, timezone
 from typing import Optional, List, Any
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Response, UploadFile, File, Form
@@ -33,7 +34,7 @@ logger = logging.getLogger("interviewiq")
 
 # ---------- DB ----------
 mongo_url = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
-client = AsyncIOMotorClient(mongo_url)
+client = AsyncIOMotorClient(mongo_url, tlsCAFile=certifi.where())
 db = client[os.environ.get("DB_NAME", "interviewiq")]
 
 
